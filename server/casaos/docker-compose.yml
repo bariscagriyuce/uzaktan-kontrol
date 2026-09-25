@@ -22,7 +22,7 @@ services:
       - "21116:21116"
       - "21116:21116/udp"
       # WebSocket, reached by the gateway through the host.
-      - "21118:21118"
+      - "21128:21118"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     depends_on: [hbbr]
@@ -34,7 +34,7 @@ services:
     command: hbbr
     ports:
       - "21117:21117"
-      - "21119:21119"
+      - "21129:21119"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     restart: unless-stopped
@@ -43,7 +43,7 @@ services:
     image: ghcr.io/bariscagriyuce/uzaktan-kontrol-account:latest
     container_name: uzaktan-kontrol-account
     ports:
-      - "21120:8000"
+      - "21130:8000"
     environment:
       PUBLIC_HOST: uzak.alanadin.com
       ADMIN_USERNAME: baris
@@ -85,13 +85,13 @@ services:
         }
         :80 {
             handle /ws/id* {
-                reverse_proxy host.docker.internal:21118
+                reverse_proxy host.docker.internal:21128
             }
             handle /ws/relay* {
-                reverse_proxy host.docker.internal:21119
+                reverse_proxy host.docker.internal:21129
             }
             handle {
-                reverse_proxy host.docker.internal:21120
+                reverse_proxy host.docker.internal:21130
             }
         }
         EOF
