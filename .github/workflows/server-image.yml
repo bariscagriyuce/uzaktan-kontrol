@@ -1,0 +1,39 @@
+name: Hesap sunucusu imajı
+
+# Publishes ghcr.io/<owner>/uzaktan-kontrol-account for installs that pull a
+# ready image (CasaOS custom install).
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - "server/account-server/**"
+      - ".github/workflows/server-image.yml"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/uzaktan-kontrol-account" >> "$GITHUB_ENV"
+      - uses: docker/build-push-action@v6
+        with:
+          context: server/account-server
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}

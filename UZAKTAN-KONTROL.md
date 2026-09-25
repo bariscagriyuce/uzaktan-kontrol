@@ -99,7 +99,16 @@ Ev IP'n değişebildiği için https://www.duckdns.org adresinden ücretsiz bir 
 | 21116 | UDP | ID sunucusu |
 | 443 | TCP | Web paneli / API (HTTPS) |
 
-**d) Kurulum** (CasaOS'a SSH ile bağlan ya da CasaOS'un terminalini kullan)
+**d) Kurulum: CasaOS arayüzünden (önerilen)**
+
+1. [`server/casaos/docker-compose.yml`](server/casaos/docker-compose.yml) dosyasının içeriğini kopyala.
+2. Bir metin düzenleyicide `uzak.alanadin.com` geçen her yeri kendi alan adınla değiştir (4 yer). `ADMIN_PASSWORD` satırına güçlü bir şifre yaz.
+3. CasaOS → **Uygulama Mağazası** → sağ üstteki **+** → **Özel Uygulama Kur** → **İçe Aktar** → metni yapıştır → **Gönder** → **Kur**.
+4. Anahtar dosyası: CasaOS **Dosyalar** → `/DATA/AppData/uzaktan-kontrol/relay/id_ed25519.pub`.
+
+Hesap sunucusunun imajı (`ghcr.io/bariscagriyuce/uzaktan-kontrol-account`) GitHub Actions ile otomatik derlenir.
+
+**d2) Kurulum: terminalden** (CasaOS'a SSH ile bağlan ya da CasaOS'un terminalini kullan)
 
 ```bash
 cd /DATA

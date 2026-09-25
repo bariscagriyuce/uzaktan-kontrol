@@ -1,0 +1,108 @@
+# CasaOS: Uygulama Mağazası → sağ üstteki "+" → "Özel Uygulama Kur" → "İçe Aktar".
+# Yapıştırmadan önce:
+#   1. "uzak.alanadin.com" geçen her yeri kendi alan adınla (ya da ev içi
+#      deneme için sunucunun yerel IP'siyle) değiştir.
+#   2. ADMIN_PASSWORD'e güçlü bir şifre yaz.
+name: uzaktan-kontrol
+
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    container_name: uzaktan-kontrol-hbbs
+    command: hbbs
+    environment:
+      RELAY: uzak.alanadin.com:21117
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+    volumes:
+      - /DATA/AppData/uzaktan-kontrol/relay:/root
+    depends_on: [hbbr]
+    restart: unless-stopped
+    x-casaos:
+      envs:
+        - container: RELAY
+          description:
+            en_us: Relay address (your domain):21117
+            tr_tr: Aktarıcı adresi (alan adın):21117
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    container_name: uzaktan-kontrol-hbbr
+    command: hbbr
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+    volumes:
+      - /DATA/AppData/uzaktan-kontrol/relay:/root
+    restart: unless-stopped
+
+  account:
+    image: ghcr.io/bariscagriyuce/uzaktan-kontrol-account:latest
+    container_name: uzaktan-kontrol-account
+    environment:
+      PUBLIC_HOST: uzak.alanadin.com
+      ADMIN_USERNAME: baris
+      ADMIN_PASSWORD: buraya-guclu-bir-sifre-yaz
+      RELAY_KEY_FILE: /relay-data/id_ed25519.pub
+    volumes:
+      - /DATA/AppData/uzaktan-kontrol/account:/data
+      - /DATA/AppData/uzaktan-kontrol/relay:/relay-data:ro
+    restart: unless-stopped
+    x-casaos:
+      envs:
+        - container: PUBLIC_HOST
+          description:
+            en_us: Your domain
+            tr_tr: Alan adın
+        - container: ADMIN_USERNAME
+          description:
+            en_us: First account (created on first start)
+            tr_tr: İlk hesap (ilk açılışta oluşturulur)
+        - container: ADMIN_PASSWORD
+          description:
+            en_us: First account password
+            tr_tr: İlk hesabın şifresi
+
+  caddy:
+    image: caddy:2
+    container_name: uzaktan-kontrol-web
+    # HTTPS in front of the account server; DOMAIN is read inside the container.
+    command: ["sh", "-c", "exec caddy reverse-proxy --from \"$$DOMAIN\" --to account:8000"]
+    environment:
+      DOMAIN: uzak.alanadin.com
+    ports:
+      # CasaOS keeps port 80 for its own dashboard; certificates are issued over 443.
+      - "8088:80"
+      - "443:443"
+    volumes:
+      - /DATA/AppData/uzaktan-kontrol/caddy:/data
+    depends_on: [account]
+    restart: unless-stopped
+    x-casaos:
+      envs:
+        - container: DOMAIN
+          description:
+            en_us: Your domain
+            tr_tr: Alan adın
+
+x-casaos:
+  architectures: [amd64, arm64]
+  main: caddy
+  author: bariscagriyuce
+  developer: bariscagriyuce
+  category: Utilities
+  icon: https://raw.githubusercontent.com/bariscagriyuce/uzaktan-kontrol/master/res/128x128.png
+  title:
+    en_us: Uzaktan Kontrol
+  tagline:
+    en_us: Remote desktop server with accounts
+    tr_tr: Hesaplı uzak masaüstü sunucusu
+  description:
+    en_us: ID server, relay, account server and web panel for the Uzaktan Kontrol apps.
+    tr_tr: Uzaktan Kontrol uygulamaları için ID sunucusu, aktarıcı, hesap sunucusu ve web paneli.
+  scheme: https
+  port_map: "443"
+  index: /
