@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -89,6 +90,7 @@ class _RemotePageState extends State<RemotePage>
   Timer? _timer;
   String keyboardMode = "legacy";
   bool _isWindowBlur = false;
+  final _dropHover = false.obs;
   // Known macOS remote-input trade-offs (kept simple intentionally):
   // 1. Dialogs rely on FocusNode loss plus middleBlocked, not mirrored dialog
   //    state. Reproduce: activate remote input, open a dialog, then type.
@@ -716,7 +718,14 @@ class _RemotePageState extends State<RemotePage>
         );
 
     bodyWidget() {
-      return Stack(
+      return DropTarget(
+        onDragEntered: (_) => _dropHover.value = true,
+        onDragExited: (_) => _dropHover.value = false,
+        onDragDone: (detail) {
+          _dropHover.value = false;
+          _sendDroppedFiles(detail.files.map((f) => f.path).toList());
+        },
+        child: Stack(
         children: [
           Container(
               color: kColorCanvas,
@@ -779,8 +788,9 @@ class _RemotePageState extends State<RemotePage>
               _ffi.ffiModel.pi.isSet.isFalse ? emptyOverlay() : Offstage(),
             ],
           ),
+          Obx(() => _dropHover.isTrue ? _dropOverlay() : const Offstage()),
         ],
-      );
+      ));
     }
 
     return Scaffold(
@@ -811,6 +821,43 @@ class _RemotePageState extends State<RemotePage>
           return bodyWidget();
         }
       }),
+    );
+  }
+
+  /// Opens (or reuses) a file transfer session to this peer, authorized by the
+  /// current session's token, and uploads [paths] into the remote folder.
+  void _sendDroppedFiles(List<String> paths) {
+    if (paths.isEmpty) return;
+    if (_ffi.ffiModel.permissions['file'] == false) {
+      showToast(translate('No permission of file transfer'));
+      return;
+    }
+    connect(context, widget.id,
+        isFileTransfer: true,
+        connToken: bind.sessionGetConnToken(sessionId: sessionId),
+        uploadPaths: paths);
+  }
+
+  Widget _dropOverlay() {
+    return IgnorePointer(
+      child: Container(
+        color: Colors.black.withOpacity(0.45),
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: MyTheme.accent, width: 2),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.upload_file, size: 48, color: MyTheme.accent),
+            const SizedBox(height: 12),
+            Text(translate('Drop files to send them to the remote computer'),
+                style: Theme.of(context).textTheme.titleMedium),
+          ]),
+        ),
+      ),
     );
   }
 

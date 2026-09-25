@@ -36,6 +36,8 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
           .setTitle(getWindowNameWithId(id));
     };
     tabController.onRemoved = (_, id) => onRemoveId(id);
+    FileManagerPage.queueUpload(
+        params['id'], (params['uploadPaths'] as List? ?? []).cast<String>());
     tabController.add(TabInfo(
         key: params['id'],
         label: params['id'],
@@ -72,6 +74,8 @@ class _FileManagerTabPageState extends State<FileManagerTabPage> {
       if (call.method == kWindowEventNewFileTransfer) {
         final args = jsonDecode(call.arguments);
         final id = args['id'];
+        FileManagerPage.queueUpload(
+            id, (args['uploadPaths'] as List? ?? []).cast<String>());
         windowOnTop(windowId());
         tabController.add(TabInfo(
             key: id,

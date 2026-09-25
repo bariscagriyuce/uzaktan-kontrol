@@ -18,6 +18,10 @@ on:
 # in this file!
 
 env:
+  # Own server baked into the apps (repository Settings -> Variables -> Actions).
+  UK_SERVER: "${{ vars.UK_SERVER }}"
+  UK_KEY: "${{ vars.UK_KEY }}"
+  UK_API_SERVER: "${{ vars.UK_API_SERVER }}"
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
   RUST_VERSION: "1.75" # sciter failed on m1 with 1.78 because of https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
   MAC_RUST_VERSION: "1.81" # 1.81 is requred for macos, because of https://github.com/yury/cidre requires 1.81
@@ -464,8 +468,8 @@ jobs:
   build-for-windows-sciter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
     runs-on: ${{ matrix.job.os }}
-    # Temporarily disable this action due to additional test is needed.
-    # if: false
+    # Legacy Sciter UI: not shipped by Uzaktan Kontrol.
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -1861,6 +1865,7 @@ jobs:
   # old for it. A separate job rather than a matrix entry of build-rustdesk-linux: appimage and
   # flatpak need that job, and a failure here must not skip them.
   build-rustdesk-linux-drm:
+    if: false # headless DRM build: not shipped by Uzaktan Kontrol
     needs: [generate-bridge]
     name: build rustdesk linux drm x86_64
     runs-on: ubuntu-22.04
@@ -2163,7 +2168,7 @@ jobs:
           path: ${{ env.DRM_DEB }}
 
   build-rustdesk-linux-sciter:
-    if: ${{ inputs.upload-artifact }}
+    if: false # legacy Sciter UI: not shipped by Uzaktan Kontrol
     runs-on: ${{ matrix.job.on }}
     name: build-rustdesk-linux-sciter ${{ matrix.job.target }}
     strategy:

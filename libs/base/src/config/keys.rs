@@ -72,6 +72,11 @@ pub const OPTION_ALLOW_ALWAYS_SOFTWARE_RENDER: &str = "allow-always-software-ren
 pub const OPTION_ENABLE_HWCODEC: &str = "enable-hwcodec";
 pub const OPTION_APPROVE_MODE: &str = "approve-mode";
 pub const OPTION_VERIFICATION_METHOD: &str = "verification-method";
+// Set while the API server reports this device as linked to an account.
+pub const OPTION_ACCOUNT_ENROLLED: &str = "account-enrolled";
+// Set when the permanent password was generated for account access, so it can
+// be rotated once the device leaves the account.
+pub const OPTION_ACCOUNT_MANAGED_PASSWORD: &str = "account-managed-password";
 pub const OPTION_TEMPORARY_PASSWORD_LENGTH: &str = "temporary-password-length";
 pub const OPTION_CUSTOM_RENDEZVOUS_SERVER: &str = "custom-rendezvous-server";
 pub const OPTION_API_SERVER: &str = "api-server";

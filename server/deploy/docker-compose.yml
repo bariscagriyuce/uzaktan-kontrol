@@ -1,0 +1,50 @@
+# Uzaktan Kontrol sunucusu: ID sunucusu (hbbs), aktarıcı (hbbr),
+# hesap sunucusu ve otomatik HTTPS (Caddy).
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:latest
+    command: hbbs -r ${DOMAIN}:21117
+    ports:
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21118:21118"
+    volumes:
+      - ./data/relay:/root
+    depends_on: [hbbr]
+    restart: unless-stopped
+
+  hbbr:
+    image: rustdesk/rustdesk-server:latest
+    command: hbbr
+    ports:
+      - "21117:21117"
+      - "21119:21119"
+    volumes:
+      - ./data/relay:/root
+    restart: unless-stopped
+
+  account:
+    build: ../account-server
+    environment:
+      PUBLIC_HOST: ${DOMAIN}
+      ADMIN_USERNAME: ${ADMIN_USERNAME}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      RELAY_KEY_FILE: /relay-data/id_ed25519.pub
+    volumes:
+      - ./data/account:/data
+      - ./data/relay:/relay-data:ro
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data
+    depends_on: [account]
+    restart: unless-stopped

@@ -230,6 +230,7 @@ class RustDeskMultiWindowManager {
     bool? isRDP,
     bool? isSharedPassword,
     String? connToken,
+    List<String>? uploadPaths,
   }) async {
     var params = {
       "type": type.index,
@@ -248,6 +249,9 @@ class RustDeskMultiWindowManager {
     }
     if (connToken != null) {
       params['connToken'] = connToken;
+    }
+    if (uploadPaths != null) {
+      params['uploadPaths'] = uploadPaths;
     }
     final msg = jsonEncode(params);
 
@@ -292,6 +296,7 @@ class RustDeskMultiWindowManager {
     bool? isSharedPassword,
     bool? forceRelay,
     String? connToken,
+    List<String>? uploadPaths,
   }) async {
     return await newSession(
       WindowType.FileTransfer,
@@ -302,6 +307,7 @@ class RustDeskMultiWindowManager {
       forceRelay: forceRelay,
       isSharedPassword: isSharedPassword,
       connToken: connToken,
+      uploadPaths: uploadPaths,
     );
   }
 

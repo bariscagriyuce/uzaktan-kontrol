@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uzaktan Kontrol Hesabı</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --text: #1d2330; --muted: #667085;
+    --line: #e4e7ec; --accent: #2563eb; --ok: #16a34a; --warn: #d97706; --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1218; --card: #181c24; --text: #e6e8ec; --muted: #98a2b3;
+            --line: #2a303b; --accent: #60a5fa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 880px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  input { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--line);
+          background: var(--bg); color: var(--text); font: inherit; }
+  button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent);
+           color: #fff; font: inherit; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--accent); }
+  button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .err { color: var(--bad); font-size: 14px; min-height: 1.5em; margin-top: 8px; }
+  .login { max-width: 380px; margin: 10vh auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+  .dot.on { background: var(--ok); }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
+  .tag.ok { color: var(--ok); } .tag.warn { color: var(--warn); }
+  code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; word-break: break-all; }
+  .qr svg { width: 180px; height: 180px; background: #fff; padding: 8px; border-radius: 8px; }
+  .hidden { display: none !important; }
+  @media (max-width: 640px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <section id="login-view" class="card login hidden">
+    <h1>Uzaktan Kontrol</h1>
+    <p class="muted">Hesabına giriş yap</p>
+    <form id="login-form">
+      <div id="pw-step">
+        <label for="u">Kullanıcı adı</label><input id="u" autocomplete="username" required>
+        <label for="p">Şifre</label><input id="p" type="password" autocomplete="current-password" required>
+      </div>
+      <div id="tfa-step" class="hidden">
+        <label for="code">Doğrulama uygulamasındaki 6 haneli kod</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      </div>
+      <div class="err" id="login-err"></div>
+      <div class="row"><button type="submit">Giriş yap</button></div>
+    </form>
+  </section>
+
+  <div id="app-view" class="hidden">
+    <header>
+      <h1>Bilgisayarlarım</h1>
+      <div class="row" style="margin:0"><span class="muted" id="who"></span><button class="ghost" id="logout">Çıkış</button></div>
+    </header>
+
+    <section class="card">
+      <table>
+        <thead><tr><th>Bilgisayar</th><th>ID</th><th class="hide-sm">Sistem</th><th>Kodsuz erişim</th><th></th></tr></thead>
+        <tbody id="devices"></tbody>
+      </table>
+      <p class="muted" id="no-devices">Henüz bilgisayar yok. Bir bilgisayarı hesabına eklemek için o bilgisayardaki uygulamada bu hesapla giriş yap.</p>
+    </section>
+
+    <section class="card">
+      <h2>Uygulama ayarları</h2>
+      <p class="muted">Her bilgisayarda ve telefonda <b>Ayarlar → Ağ → ID/Aktarıcı sunucusu</b> bölümüne şunları gir:</p>
+      <table>
+        <tr><td>ID sunucusu</td><td><code id="s-host"></code></td></tr>
+        <tr><td>Aktarıcı sunucusu</td><td><code id="s-relay"></code></td></tr>
+        <tr><td>API sunucusu</td><td><code id="s-api"></code></td></tr>
+        <tr><td>Anahtar</td><td><code id="s-key"></code></td></tr>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>İki adımlı doğrulama</h2>
+      <p class="muted" id="tfa-state"></p>
+      <div id="tfa-setup" class="hidden">
+        <p class="muted">Google Authenticator, Aegis veya benzeri bir uygulamayla kodu tara, sonra uygulamadaki kodu gir.</p>
+        <div class="qr" id="tfa-qr"></div>
+        <p class="muted">Elle girmek için: <code id="tfa-secret"></code></p>
+      </div>
+      <div id="tfa-code-row" class="hidden"><label for="tfa-code">6 haneli kod</label><input id="tfa-code" inputmode="numeric" maxlength="6"></div>
+      <div class="err" id="tfa-err"></div>
+      <div class="row"><button id="tfa-btn"></button></div>
+    </section>
+
+    <section class="card">
+      <h2>Şifre değiştir</h2>
+      <form id="pw-form">
+        <label for="old">Mevcut şifre</label><input id="old" type="password" autocomplete="current-password" required>
+        <label for="new">Yeni şifre (en az 8 karakter)</label><input id="new" type="password" autocomplete="new-password" minlength="8" required>
+        <div class="err" id="pw-err"></div>
+        <div class="row"><button type="submit">Şifreyi değiştir</button></div>
+      </form>
+    </section>
+  </div>
+</main>
+<script>
+const TR = {
+  "Wrong username or password": "Kullanıcı adı veya şifre hatalı",
+  "Wrong verification code": "Doğrulama kodu hatalı",
+  "Too many attempts, try again later": "Çok fazla deneme yapıldı, biraz sonra tekrar dene",
+  "Login expired, please sign in again": "Giriş süresi doldu, tekrar giriş yap",
+  "Current password is wrong": "Mevcut şifre hatalı",
+  "Password must be at least 8 characters": "Şifre en az 8 karakter olmalı",
+};
+const $ = (id) => document.getElementById(id);
+const store = {
+  get() { try { return sessionStorage.getItem("token") || ""; } catch { return ""; } },
+  set(v) { try { v ? sessionStorage.setItem("token", v) : sessionStorage.removeItem("token"); } catch {} },
+};
+let token = store.get();
+let challenge = null, pendingSecret = null, me = null;
+
+async function api(path, body, method = "POST") {
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = "Bearer " + token;
+  const r = await fetch(path, { method, headers, body: method === "GET" ? undefined : JSON.stringify(body || {}) });
+  let data = {};
+  try { data = await r.json(); } catch {}
+  if (r.status === 401) { store.set(token = ""); show(); throw new Error(""); }
+  if (data && data.error) throw new Error(TR[data.error] || data.error);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return data;
+}
+
+$("login-form").onsubmit = async (e) => {
+  e.preventDefault();
+  $("login-err").textContent = "";
+  const deviceInfo = { os: "web", type: "browser", name: "Web paneli" };
+  try {
+    const res = challenge
+      ? await api("/api/login", { secret: challenge, tfaCode: $("code").value.trim(), username: $("u").value, deviceInfo })
+      : await api("/api/login", { username: $("u").value, password: $("p").value, deviceInfo });
+    if (res.type === "email_check") {
+      challenge = res.secret;
+      $("pw-step").classList.add("hidden"); $("tfa-step").classList.remove("hidden"); $("code").focus();
+      return;
+    }
+    store.set(token = res.access_token);
+    challenge = null;
+    show();
+  } catch (err) { $("login-err").textContent = err.message; }
+};
+
+$("logout").onclick = async () => { try { await api("/api/logout"); } catch {} store.set(token = ""); show(); };
+
+function ago(t) {
+  if (!t) return "hiç görülmedi";
+  const s = Math.floor(Date.now() / 1000) - t;
+  if (s < 3600) return Math.max(1, Math.floor(s / 60)) + " dk önce";
+  if (s < 86400) return Math.floor(s / 3600) + " sa önce";
+  return Math.floor(s / 86400) + " gün önce";
+}
+
+async function loadDevices() {
+  const list = await api("/api/panel/devices", null, "GET");
+  const tb = $("devices"); tb.innerHTML = "";
+  $("no-devices").classList.toggle("hidden", list.length > 0);
+  for (const d of list) {
+    const tr = document.createElement("tr");
+    const name = document.createElement("td");
+    name.innerHTML = `<span class="dot ${d.online ? "on" : ""}"></span>`;
+    name.append(d.hostname || "(adsız)");
+    const sub = document.createElement("div"); sub.className = "muted";
+    sub.textContent = d.online ? "çevrimiçi" : ago(d.last_seen);
+    name.append(sub);
+    const id = document.createElement("td"); id.innerHTML = "<code></code>"; id.firstChild.textContent = d.id;
+    const os = document.createElement("td"); os.className = "hide-sm"; os.textContent = d.os;
+    const ready = document.createElement("td");
+    ready.innerHTML = d.ready ? '<span class="tag ok">hazır</span>' : '<span class="tag warn">bekleniyor</span>';
+    if (!d.ready) ready.title = "Bilgisayar açık ve uygulama çalışır durumdayken birkaç saniye içinde hazır olur.";
+    const act = document.createElement("td");
+    const b = document.createElement("button"); b.className = "danger"; b.textContent = "Kaldır";
+    b.onclick = async () => {
+      if (!confirm(`${d.hostname || d.id} hesabından kaldırılsın mı? Bu bilgisayara bir daha kodsuz bağlanılamaz.`)) return;
+      await api("/api/panel/devices/remove", { uuid: d.uuid }); loadDevices();
+    };
+    act.append(b);
+    tr.append(name, id, os, ready, act); tb.append(tr);
+  }
+}
+
+async function loadMe() {
+  me = await api("/api/panel/me", null, "GET");
+  $("who").textContent = me.name;
+  pendingSecret = null;
+  $("tfa-setup").classList.add("hidden");
+  $("tfa-code-row").classList.toggle("hidden", !me.totp);
+  $("tfa-state").textContent = me.totp ? "Açık. Girişte şifrenin yanında doğrulama kodu da istenir." : "Kapalı. Hesabını korumak için açman önerilir.";
+  $("tfa-btn").textContent = me.totp ? "Kapat" : "Aç";
+  $("tfa-btn").className = me.totp ? "danger" : "";
+}
+
+$("tfa-btn").onclick = async () => {
+  $("tfa-err").textContent = "";
+  try {
+    if (me.totp) {
+      await api("/api/panel/totp/disable", { code: $("tfa-code").value.trim() });
+    } else if (!pendingSecret) {
+      const s = await api("/api/panel/totp/setup");
+      pendingSecret = s.secret;
+      $("tfa-qr").innerHTML = s.qr; $("tfa-secret").textContent = s.secret;
+      $("tfa-setup").classList.remove("hidden"); $("tfa-code-row").classList.remove("hidden");
+      $("tfa-btn").textContent = "Doğrula ve aç";
+      return;
+    } else {
+      await api("/api/panel/totp/enable", { secret: pendingSecret, code: $("tfa-code").value.trim() });
+    }
+    $("tfa-code").value = "";
+    await loadMe();
+  } catch (err) { $("tfa-err").textContent = err.message; }
+};
+
+$("pw-form").onsubmit = async (e) => {
+  e.preventDefault(); $("pw-err").textContent = "";
+  try {
+    await api("/api/panel/password", { old: $("old").value, new: $("new").value });
+    $("old").value = $("new").value = "";
+    $("pw-err").textContent = "Şifre değişti. Diğer tüm oturumlar kapatıldı.";
+  } catch (err) { $("pw-err").textContent = err.message; }
+};
+
+async function loadServer() {
+  const s = await api("/api/panel/server-info", null, "GET");
+  const host = s.host || location.hostname;
+  $("s-host").textContent = host; $("s-relay").textContent = host;
+  $("s-api").textContent = location.origin; $("s-key").textContent = s.key || "(sunucuda bulunamadı)";
+}
+
+let timer = null;
+function show() {
+  const logged = !!token;
+  $("login-view").classList.toggle("hidden", logged);
+  $("app-view").classList.toggle("hidden", !logged);
+  clearInterval(timer);
+  if (logged) {
+    Promise.all([loadMe(), loadDevices(), loadServer()]).catch(() => {});
+    timer = setInterval(() => loadDevices().catch(() => {}), 15000);
+  } else {
+    $("pw-step").classList.remove("hidden"); $("tfa-step").classList.add("hidden");
+  }
+}
+show();
+</script>
+</body>
+</html>

@@ -51,6 +51,23 @@ enum MouseFocusScope {
   none
 }
 
+/// Files dragged from one pane of the file manager to the other.
+class _FileDragData {
+  final FileController source;
+  final Entry entry;
+  _FileDragData(this.source, this.entry);
+
+  /// The dragged row, or the whole selection when the row is part of it.
+  SelectedItems items() {
+    final items = SelectedItems(isLocal: source.isLocal);
+    final selected = source.selectedItems.items;
+    for (final e in selected.contains(entry) ? selected : [entry]) {
+      items.add(e);
+    }
+    return items;
+  }
+}
+
 class FileManagerPage extends StatefulWidget {
   FileManagerPage(
       {Key? key,
@@ -68,6 +85,16 @@ class FileManagerPage extends StatefulWidget {
   final String? connToken;
   final DesktopTabController? tabController;
   final SimpleWrapper<State<FileManagerPage>?> _lastState = SimpleWrapper(null);
+
+  /// Local paths waiting to be uploaded to a peer, keyed by peer id.
+  /// Filled when files are dropped onto a remote desktop window; the page for
+  /// that peer uploads them once the remote directory is known.
+  static final pendingUploads = RxMap<String, List<String>>();
+
+  static void queueUpload(String id, List<String> paths) {
+    if (paths.isEmpty) return;
+    pendingUploads[id] = [...?pendingUploads[id], ...paths];
+  }
 
   FFI get ffi => (_lastState.value! as _FileManagerPageState)._ffi;
 
@@ -91,6 +118,7 @@ class _FileManagerPageState extends State<FileManagerPage>
 
   FileModel get model => _ffi.fileModel;
   JobController get jobController => model.jobController;
+  Worker? _pendingUploadWorker;
 
   @override
   void initState() {
@@ -118,10 +146,37 @@ class _FileManagerPageState extends State<FileManagerPage>
       widget.tabController?.onSelected?.call(widget.id);
     });
     WidgetsBinding.instance.addObserver(this);
+    _pendingUploadWorker = everAll(
+        [FileManagerPage.pendingUploads, model.remoteController.directory],
+        (_) => _flushPendingUploads());
+  }
+
+  void _flushPendingUploads() {
+    if (model.remoteController.directory.value.path.isEmpty) return;
+    final paths = FileManagerPage.pendingUploads.remove(widget.id);
+    if (paths != null) uploadLocalPaths(paths);
+  }
+
+  /// Uploads local files and folders into the remote's current directory.
+  void uploadLocalPaths(List<String> paths) {
+    final items = SelectedItems(isLocal: true);
+    for (final p in paths) {
+      final isDir = FileSystemEntity.isDirectorySync(p);
+      items.add(Entry()
+        ..path = p
+        ..name = p.split(RegExp(r'[\\/]')).lastWhere((e) => e.isNotEmpty,
+            orElse: () => p)
+        ..entryType = isDir ? 0 : 4
+        ..size = isDir ? 0 : File(p).lengthSync());
+    }
+    if (items.items.isEmpty) return;
+    model.localController
+        .sendFiles(items, model.remoteController.directoryData());
   }
 
   @override
   void dispose() {
+    _pendingUploadWorker?.dispose();
     model.close().whenComplete(() {
       _ffi.close();
       _ffi.dialogManager.dismissAll();
@@ -169,12 +224,16 @@ class _FileManagerPageState extends State<FileManagerPage>
               if (!isWeb)
                 Flexible(
                     flex: 3,
-                    child: dropArea(FileManagerView(
-                        model.localController, _ffi, _mouseFocusScope))),
+                    child: paneDragTarget(
+                        model.localController,
+                        dropArea(FileManagerView(
+                            model.localController, _ffi, _mouseFocusScope)))),
               Flexible(
                   flex: 3,
-                  child: dropArea(FileManagerView(
-                      model.remoteController, _ffi, _mouseFocusScope))),
+                  child: paneDragTarget(
+                      model.remoteController,
+                      dropArea(FileManagerView(
+                          model.remoteController, _ffi, _mouseFocusScope)))),
               Flexible(flex: 2, child: statusList())
             ],
           ),
@@ -194,6 +253,34 @@ class _FileManagerPageState extends State<FileManagerPage>
           _dropMaskVisible.value = false;
         },
         child: fileView);
+  }
+
+  /// Accepts rows dragged from the other pane and transfers them into
+  /// [target]'s current directory.
+  Widget paneDragTarget(FileController target, Widget child) {
+    return DragTarget<_FileDragData>(
+      onWillAccept: (data) => data != null && data.source != target,
+      onAccept: (data) {
+        final items = data.items();
+        if (!SelectedItems.valid(items.items)) return;
+        data.source.sendFiles(items, target.directoryData());
+        data.source.selectedItems.clear();
+      },
+      builder: (context, candidates, _) => Stack(children: [
+        child,
+        if (candidates.isNotEmpty)
+          Positioned.fill(
+              child: IgnorePointer(
+                  child: Container(
+            margin: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: MyTheme.accent.withOpacity(0.08),
+              border: Border.all(color: MyTheme.accent, width: 2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ))),
+      ]),
+    );
   }
 
   Widget generateCard(Widget child) {
@@ -404,16 +491,7 @@ class _FileManagerPageState extends State<FileManagerPage>
       // ignore local
       return;
     }
-    final items = SelectedItems(isLocal: false);
-    for (var file in details.files) {
-      final f = File(file.path);
-      items.add(Entry()
-        ..path = file.path
-        ..name = file.name
-        ..size = FileSystemEntity.isDirectorySync(f.path) ? 0 : f.lengthSync());
-    }
-    final otherSideData = model.localController.directoryData();
-    model.remoteController.sendFiles(items, otherSideData);
+    uploadLocalPaths(details.files.map((f) => f.path).toList());
   }
 }
 
@@ -1181,7 +1259,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                 details.globalPosition.dy);
           }
 
-          return Padding(
+          return _draggableRow(entry, Padding(
             padding: EdgeInsets.symmetric(vertical: 1),
             child: Obx(() => Container(
                 decoration: BoxDecoration(
@@ -1308,7 +1386,7 @@ class _FileManagerViewState extends State<FileManagerView> {
                     ),
                   ],
                 ))),
-          );
+          ));
         });
 
         return Column(
@@ -1361,6 +1439,33 @@ class _FileManagerViewState extends State<FileManagerView> {
     scrollController.jumpTo(offset);
     selectedEntries.add(searchResult.first);
     debugPrint("focused on ${searchResult.first.name}");
+  }
+
+  /// Lets a row be dragged onto the other pane to transfer it.
+  Widget _draggableRow(Entry entry, Widget row) {
+    if (entry.isDrive) return row;
+    final data = _FileDragData(controller, entry);
+    return Draggable<_FileDragData>(
+      data: data,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Builder(builder: (context) {
+        final count = data.items().items.length;
+        return Material(
+          elevation: 4,
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(entry.isDirectory ? Icons.folder : Icons.insert_drive_file,
+                  size: 18, color: MyTheme.accent),
+              const SizedBox(width: 8),
+              Text(count > 1 ? '${entry.name} (+${count - 1})' : entry.name),
+            ]),
+          ),
+        );
+      }),
+      child: row,
+    );
   }
 
   void _onSelectedChanged(SelectedItems selectedItems, List<Entry> entries,

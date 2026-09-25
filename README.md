@@ -1,3 +1,5 @@
+> **Uzaktan Kontrol:** Bu depo, RustDesk üzerine kurulu kendi sunucumla çalışan bir uzak masaüstü sistemidir. Kurulum ve değişiklikler için [UZAKTAN-KONTROL.md](UZAKTAN-KONTROL.md) dosyasına bak.
+
 <p align="center">
   <img src="res/logo-header.svg" alt="RustDesk - Your remote desktop"><br>
   <a href="#raw-steps-to-build">Build</a> •

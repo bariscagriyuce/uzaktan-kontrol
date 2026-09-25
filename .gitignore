@@ -58,3 +58,9 @@ libsciter.dylib
 flutter/web/
 # libdrmtap is cloned at build time by build.py (not a submodule)
 /third_party/libdrmtap/
+
+# Uzaktan Kontrol server
+server/deploy/.env
+server/deploy/data/
+server/account-server/.venv/
+__pycache__/

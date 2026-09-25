@@ -13,6 +13,7 @@ import 'package:flutter_hbb/desktop/widgets/refresh_wrapper.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/main.dart';
 import 'package:flutter_hbb/models/peer_model.dart';
+import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/peer_tab_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:flutter_hbb/utils/multi_window_manager.dart';
@@ -2522,6 +2523,15 @@ List<String>? urlLinkToCmdArgs(Uri uri) {
   return null;
 }
 
+/// Computers linked to the account get their access hash through the address
+/// book; refresh it so one linked moments ago is reachable without a code.
+Future<void> refreshAbBeforeConnect() async {
+  if (!gFFI.userModel.isLogin) return;
+  await gFFI.abModel
+      .pullAb(force: ForcePullAb.current, quiet: true)
+      .timeout(const Duration(seconds: 2), onTimeout: () {});
+}
+
 connectMainDesktop(String id,
     {required bool isFileTransfer,
     required bool isViewCamera,
@@ -2531,13 +2541,16 @@ connectMainDesktop(String id,
     bool? forceRelay,
     String? password,
     String? connToken,
-    bool? isSharedPassword}) async {
+    bool? isSharedPassword,
+    List<String>? uploadPaths}) async {
+  await refreshAbBeforeConnect();
   if (isFileTransfer) {
     await rustDeskWinManager.newFileTransfer(id,
         password: password,
         isSharedPassword: isSharedPassword,
         connToken: connToken,
-        forceRelay: forceRelay);
+        forceRelay: forceRelay,
+        uploadPaths: uploadPaths);
   } else if (isViewCamera) {
     await rustDeskWinManager.newViewCamera(id,
         password: password,
@@ -2569,6 +2582,7 @@ connectMainDesktop(String id,
 /// If [isViewCamera], starts a session only for view camera.
 /// If [isTcpTunneling], starts a session only for tcp tunneling.
 /// If [isRDP], starts a session only for rdp.
+/// [uploadPaths] are local files to upload once a file transfer session is ready.
 connect(BuildContext context, String id,
     {bool isFileTransfer = false,
     bool isViewCamera = false,
@@ -2578,7 +2592,8 @@ connect(BuildContext context, String id,
     bool forceRelay = false,
     String? password,
     String? connToken,
-    bool? isSharedPassword}) async {
+    bool? isSharedPassword,
+    List<String>? uploadPaths}) async {
   if (id == '') return;
   if (!isDesktop || desktopType == DesktopType.main) {
     try {
@@ -2611,6 +2626,7 @@ connect(BuildContext context, String id,
         password: password,
         isSharedPassword: isSharedPassword,
         forceRelay: forceRelay,
+        uploadPaths: uploadPaths,
       );
     } else {
       await rustDeskWinManager.call(WindowType.Main, kWindowConnect, {
@@ -2624,9 +2640,11 @@ connect(BuildContext context, String id,
         'isSharedPassword': isSharedPassword,
         'forceRelay': forceRelay,
         'connToken': connToken,
+        'uploadPaths': uploadPaths,
       });
     }
   } else {
+    await refreshAbBeforeConnect();
     if (isFileTransfer) {
       if (isWeb) {
         Navigator.push(

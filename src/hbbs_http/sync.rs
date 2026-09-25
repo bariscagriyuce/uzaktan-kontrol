@@ -242,6 +242,11 @@ async fn start_hbbs_sync_async() {
                 }
                 let modified_at = LocalConfig::get_option("strategy_timestamp").parse::<i64>().unwrap_or(0);
                 v["modified_at"] = json!(modified_at);
+                if Config::get_option(keys::OPTION_ACCOUNT_ENROLLED) == "Y" {
+                    if let Some(auth) = account_device_auth(&id) {
+                        v["account_auth"] = auth;
+                    }
+                }
                 let response = crate::post_request(url.clone(), v.to_string(), "").await;
                 if let Err(err) = &response {
                     hbb_common::throttled_log!(API_LOG_INTERVAL, warn, "Heartbeat failed: {err:?}");
@@ -265,6 +270,9 @@ async fn start_hbbs_sync_async() {
                                 }
                             }
                         }
+                        if let Some(enrolled) = rsp.remove("account_enrolled").and_then(|v| v.as_bool()) {
+                            set_account_enrolled(enrolled);
+                        }
                         if let Some(strategy) = rsp.remove("strategy") {
                             if let Ok(strategy) = serde_json::from_value::<StrategyOptions>(strategy) {
                                 log::info!("strategy updated");
@@ -274,6 +282,98 @@ async fn start_hbbs_sync_async() {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Proof for the API server that lets devices of the same account log in here
+/// without a connection code: the permanent password's h1 (what an address
+/// book entry's `hash` holds), signed with this device's key.
+fn account_device_auth(id: &str) -> Option<Value> {
+    use hbb_common::sodiumoxide::crypto::sign;
+    use sha2::{Digest, Sha256};
+
+    ensure_account_permanent_password();
+    let (storage, _) = Config::get_local_permanent_password_storage_and_salt();
+    if storage.is_empty() {
+        return None;
+    }
+    let h1 = match config::decode_permanent_password_h1_from_storage(&storage) {
+        Some(h1) => h1.to_vec(),
+        None => {
+            // Legacy plaintext storage.
+            let mut hasher = Sha256::new();
+            hasher.update(storage.as_bytes());
+            hasher.update(Config::get_effective_permanent_password_salt().as_bytes());
+            hasher.finalize().to_vec()
+        }
+    };
+    let hash = crate::encode64(h1);
+    let kp = Config::get_key_pair();
+    let Some(sk) = sign::SecretKey::from_slice(&kp.0) else {
+        log::error!("Account auth: no device key");
+        return None;
+    };
+    let uuid = crate::encode64(hbb_common::get_uuid());
+    let timestamp = (hbb_common::get_time() / 1000).to_string();
+    let signature = sign::sign_detached(
+        &account_auth_signed_msg(id, &uuid, &hash, &timestamp),
+        &sk,
+    );
+    Some(json!({
+        "hash": hash,
+        "pk": crate::encode64(&kp.1),
+        "timestamp": timestamp,
+        "signature": crate::encode64(signature.to_bytes()),
+    }))
+}
+
+fn account_auth_signed_msg(id: &str, uuid: &str, hash: &str, timestamp: &str) -> Vec<u8> {
+    format!("account-auth\0{id}\0{uuid}\0{hash}\0{timestamp}").into_bytes()
+}
+
+/// Account access needs a permanent password; generate a strong one if the
+/// user has not set any.
+fn ensure_account_permanent_password() {
+    if Config::get_option(keys::OPTION_VERIFICATION_METHOD) == "use-temporary-password" {
+        Config::set_option(
+            keys::OPTION_VERIFICATION_METHOD.to_owned(),
+            "use-both-passwords".to_owned(),
+        );
+    }
+    if Config::has_local_permanent_password() {
+        return;
+    }
+    if Config::set_permanent_password(&random_password()) {
+        Config::set_option(keys::OPTION_ACCOUNT_MANAGED_PASSWORD.to_owned(), "Y".to_owned());
+        log::info!("Generated permanent password for account access");
+    }
+}
+
+fn random_password() -> String {
+    use hbb_common::rand::{distributions::Alphanumeric, Rng};
+    hbb_common::rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect()
+}
+
+fn set_account_enrolled(enrolled: bool) {
+    let was_enrolled = Config::get_option(keys::OPTION_ACCOUNT_ENROLLED) == "Y";
+    if enrolled == was_enrolled {
+        return;
+    }
+    Config::set_option(
+        keys::OPTION_ACCOUNT_ENROLLED.to_owned(),
+        if enrolled { "Y" } else { "" }.to_owned(),
+    );
+    log::info!("Account enrollment changed: {enrolled}");
+    // The account knew the old password's hash; a generated password has no
+    // other owner, so replace it to cut that access.
+    if !enrolled && Config::get_option(keys::OPTION_ACCOUNT_MANAGED_PASSWORD) == "Y" {
+        if !Config::set_permanent_password(&random_password()) {
+            log::error!("Failed to rotate account permanent password");
         }
     }
 }
