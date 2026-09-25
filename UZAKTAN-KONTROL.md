@@ -72,10 +72,54 @@ Ardından `https://DOMAIN` adresindeki web paneline gir. Buradan şunları yapab
 Kullanıcı yönetimi (sunucuda):
 
 ```bash
-docker compose exec account python -m app.cli adduser ayse
-docker compose exec account python -m app.cli passwd baris
-docker compose exec account python -m app.cli reset-2fa baris
+docker compose exec -u app account python -m app.cli adduser ayse
+docker compose exec -u app account python -m app.cli passwd baris
+docker compose exec -u app account python -m app.cli reset-2fa baris
 ```
+
+### Ev sunucusuna (CasaOS) kurulum
+
+CasaOS altta normal Docker kullandığı için yukarıdaki kurulum aynen çalışır.
+Ev ağında ek olarak şunlar gerekir:
+
+**a) Dışarıdan erişilebilir misin? (CGNAT kontrolü)**
+Modem arayüzündeki WAN IP adresini https://ifconfig.me adresinin gösterdiği IP ile karşılaştır.
+Farklıysa ya da WAN IP `100.64.x.x`–`100.127.x.x` aralığındaysa operatörün CGNAT kullanıyordur. Bu durumda port yönlendirme işe yaramaz.
+Operatörden "statik/gerçek IP" iste ya da sunucuyu küçük bir VPS'e taşı.
+
+**b) Alan adı (dinamik DNS)**
+Ev IP'n değişebildiği için https://www.duckdns.org adresinden ücretsiz bir ad al
+(ör. `benimevim.duckdns.org`). IP'yi güncel tutmak için modemindeki DDNS özelliğini ya da CasaOS App Store'daki DuckDNS uygulamasını kullan.
+
+**c) Modemde port yönlendirme** (hepsi CasaOS makinesinin yerel IP'sine)
+
+| Port | Protokol | Ne için |
+|---|---|---|
+| 21115–21119 | TCP | ID sunucusu ve aktarıcı |
+| 21116 | UDP | ID sunucusu |
+| 443 | TCP | Web paneli / API (HTTPS) |
+
+**d) Kurulum** (CasaOS'a SSH ile bağlan ya da CasaOS'un terminalini kullan)
+
+```bash
+cd /DATA
+git clone https://github.com/<kullanıcı-adın>/uzaktan-kontrol.git
+cd uzaktan-kontrol/server/deploy
+cp .env.example .env
+nano .env        # DOMAIN, ADMIN_USERNAME, ADMIN_PASSWORD
+docker compose up -d --build
+cat /DATA/AppData/uzaktan-kontrol/relay/id_ed25519.pub   # anahtar
+```
+
+Konteynerler CasaOS panelinde görünür; oradan başlatıp durdurabilir ve kayıtlarını izleyebilirsin.
+Veriler `/DATA/AppData/uzaktan-kontrol` klasöründe durur, yedeklemen gereken yer burası.
+
+- **80. port doluysa** (CasaOS paneli genelde 80'dedir) `.env` içinde `HTTP_PORT=8088` yap.
+  HTTPS sertifikası 443 üzerinden alınır, 80'e gerek yoktur.
+- **443 başka bir uygulamada** (ör. Nginx Proxy Manager) kullanılıyorsa `caddy` servisini sil.
+  Proxy'de alan adını `http://<sunucu-ip>:8000` adresine yönlendir ve `account` servisine `ports: ["8000:8000"]` ekle.
+- **Evdeyken alan adı açılmıyorsa** modemin NAT loopback (hairpin) desteklemiyor demektir.
+  Ev içi bağlantılar yine çalışır, çünkü uygulama aynı ağdaki cihazları kendisi bulur. Ancak hesap girişi için dışarıdan bir ağ (ör. mobil veri) gerekebilir.
 
 ## 2. Uygulamaları derle
 
