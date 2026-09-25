@@ -1,4 +1,4 @@
-name: Flutter Nightly Build
+name: Uygulamaları derle (Flutter Nightly Build)
 
 on:
   # Started by hand (Actions -> Flutter Nightly Build -> Run workflow).
