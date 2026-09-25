@@ -6,16 +6,16 @@
 # bu tek porttan geçer. HTTPS'i Cloudflare sağlar.
 #
 # Alan adını sonra da girebilirsin: CasaOS'ta uygulamanın ayarlarından
-# RELAY_SERVERS ve PUBLIC_HOST değerlerini değiştirmen yeterli.
+# hbbs komutundaki (-r) adresi ve PUBLIC_HOST değerini değiştirmen yeterli.
 name: uzaktan-kontrol
 
 services:
   hbbs:
     image: rustdesk/rustdesk-server:latest
     container_name: uzaktan-kontrol-hbbs
-    command: hbbs
-    environment:
-      RELAY_SERVERS: uzak.alanadin.com:21117
+    # -r: relay address handed to clients. The released image reads no env var
+    # for it reliably, so it lives in the command.
+    command: hbbs -r uzak.alanadin.com:21117
     ports:
       # Only needed for direct (port-forwarded) or LAN access; the tunnel uses 21114.
       - "21115:21115"
@@ -25,12 +25,6 @@ services:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     depends_on: [hbbr]
     restart: unless-stopped
-    x-casaos:
-      envs:
-        - container: RELAY_SERVERS
-          description:
-            en_us: "Your domain followed by :21117"
-            tr_tr: "Alan adın ve sonuna :21117"
 
   hbbr:
     image: rustdesk/rustdesk-server:latest
