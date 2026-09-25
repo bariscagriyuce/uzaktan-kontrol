@@ -1658,6 +1658,7 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            --env UK_SERVER --env UK_KEY --env UK_API_SERVER --env UK_WEBSOCKET
           shell: /bin/bash
           install: |
             apt-get update -y
@@ -1980,6 +1981,7 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/workspace"
             --volume "/opt/artifacts:/opt/artifacts"
+            --env UK_SERVER --env UK_KEY --env UK_API_SERVER --env UK_WEBSOCKET
           shell: /bin/bash
           install: |
             apt-get update -y
