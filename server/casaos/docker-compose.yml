@@ -17,10 +17,12 @@ services:
     # for it reliably, so it lives in the command.
     command: hbbs -r uzak.alanadin.com:21117
     ports:
-      # Only needed for direct (port-forwarded) or LAN access; the tunnel uses 21114.
+      # 21115-21116: direct (port-forwarded) or LAN access; the tunnel uses 21114.
       - "21115:21115"
       - "21116:21116"
       - "21116:21116/udp"
+      # WebSocket, reached by the gateway through the host.
+      - "21118:21118"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     depends_on: [hbbr]
@@ -32,6 +34,7 @@ services:
     command: hbbr
     ports:
       - "21117:21117"
+      - "21119:21119"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     restart: unless-stopped
@@ -39,6 +42,8 @@ services:
   account:
     image: ghcr.io/bariscagriyuce/uzaktan-kontrol-account:latest
     container_name: uzaktan-kontrol-account
+    ports:
+      - "21120:8000"
     environment:
       PUBLIC_HOST: uzak.alanadin.com
       ADMIN_USERNAME: baris
@@ -64,6 +69,8 @@ services:
             tr_tr: İlk hesabın şifresi
 
   # One HTTP port for everything; Cloudflare terminates HTTPS in front of it.
+  # CasaOS runs the services on Docker's default bridge, where containers cannot
+  # resolve each other by name, so the gateway reaches them through the host.
   gateway:
     image: caddy:2
     container_name: uzaktan-kontrol-gateway
@@ -78,17 +85,19 @@ services:
         }
         :80 {
             handle /ws/id* {
-                reverse_proxy hbbs:21118
+                reverse_proxy host.docker.internal:21118
             }
             handle /ws/relay* {
-                reverse_proxy hbbr:21119
+                reverse_proxy host.docker.internal:21119
             }
             handle {
-                reverse_proxy account:8000
+                reverse_proxy host.docker.internal:21120
             }
         }
         EOF
         exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "21114:80"
     depends_on: [hbbs, hbbr, account]
