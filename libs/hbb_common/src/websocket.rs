@@ -422,7 +422,11 @@ pub fn check_ws(endpoint: &str) -> String {
         (format!("{}{}", endpoint_host, domain_path), true)
     };
     let protocol = if is_domain {
-        let api_server = Config::get_option("api-server");
+        let mut api_server = Config::get_option("api-server");
+        if api_server.is_empty() {
+            // API server baked in at build time (see `get_api_server` in the app).
+            api_server = option_env!("UK_API_SERVER").unwrap_or_default().to_owned();
+        }
         if api_server.starts_with("https") {
             "wss"
         } else {

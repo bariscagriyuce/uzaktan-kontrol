@@ -1,8 +1,12 @@
 # CasaOS: Uygulama Mağazası → sağ üstteki "+" → "Özel Uygulama Kur" → "İçe Aktar".
-# Yapıştırmadan önce:
-#   1. "uzak.alanadin.com" geçen her yeri kendi alan adınla (ya da ev içi
-#      deneme için sunucunun yerel IP'siyle) değiştir.
-#   2. ADMIN_PASSWORD'e güçlü bir şifre yaz.
+#
+# Tek port (21114) üzerinden yayınlanır; Cloudflare Tunnel'ı bu porta yönlendir:
+#   https://alanadin.com  →  http://<casaos-ip>:21114
+# Web paneli, API ve uygulamaların WebSocket bağlantıları (/ws/id, /ws/relay)
+# bu tek porttan geçer. HTTPS'i Cloudflare sağlar.
+#
+# Alan adını sonra da girebilirsin: CasaOS'ta uygulamanın ayarlarından
+# RELAY ve PUBLIC_HOST değerlerini değiştirmen yeterli.
 name: uzaktan-kontrol
 
 services:
@@ -13,10 +17,10 @@ services:
     environment:
       RELAY: uzak.alanadin.com:21117
     ports:
+      # Only needed for direct (port-forwarded) or LAN access; the tunnel uses 21114.
       - "21115:21115"
       - "21116:21116"
       - "21116:21116/udp"
-      - "21118:21118"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     depends_on: [hbbr]
@@ -25,8 +29,8 @@ services:
       envs:
         - container: RELAY
           description:
-            en_us: Relay address (your domain):21117
-            tr_tr: Aktarıcı adresi (alan adın):21117
+            en_us: "Your domain followed by :21117"
+            tr_tr: "Alan adın ve sonuna :21117"
 
   hbbr:
     image: rustdesk/rustdesk-server:latest
@@ -34,7 +38,6 @@ services:
     command: hbbr
     ports:
       - "21117:21117"
-      - "21119:21119"
     volumes:
       - /DATA/AppData/uzaktan-kontrol/relay:/root
     restart: unless-stopped
@@ -66,31 +69,40 @@ services:
             en_us: First account password
             tr_tr: İlk hesabın şifresi
 
-  caddy:
+  # One HTTP port for everything; Cloudflare terminates HTTPS in front of it.
+  gateway:
     image: caddy:2
-    container_name: uzaktan-kontrol-web
-    # HTTPS in front of the account server; DOMAIN is read inside the container.
-    command: ["sh", "-c", "exec caddy reverse-proxy --from \"$$DOMAIN\" --to account:8000"]
-    environment:
-      DOMAIN: uzak.alanadin.com
+    container_name: uzaktan-kontrol-gateway
+    command:
+      - sh
+      - -c
+      - |
+        cat > /etc/caddy/Caddyfile <<'EOF'
+        {
+            auto_https off
+            admin off
+        }
+        :80 {
+            handle /ws/id* {
+                reverse_proxy hbbs:21118
+            }
+            handle /ws/relay* {
+                reverse_proxy hbbr:21119
+            }
+            handle {
+                reverse_proxy account:8000
+            }
+        }
+        EOF
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     ports:
-      # CasaOS keeps port 80 for its own dashboard; certificates are issued over 443.
-      - "8088:80"
-      - "443:443"
-    volumes:
-      - /DATA/AppData/uzaktan-kontrol/caddy:/data
-    depends_on: [account]
+      - "21114:80"
+    depends_on: [hbbs, hbbr, account]
     restart: unless-stopped
-    x-casaos:
-      envs:
-        - container: DOMAIN
-          description:
-            en_us: Your domain
-            tr_tr: Alan adın
 
 x-casaos:
   architectures: [amd64, arm64]
-  main: caddy
+  main: gateway
   author: bariscagriyuce
   developer: bariscagriyuce
   category: Utilities
@@ -103,6 +115,6 @@ x-casaos:
   description:
     en_us: ID server, relay, account server and web panel for the Uzaktan Kontrol apps.
     tr_tr: Uzaktan Kontrol uygulamaları için ID sunucusu, aktarıcı, hesap sunucusu ve web paneli.
-  scheme: https
-  port_map: "443"
+  scheme: http
+  port_map: "21114"
   index: /

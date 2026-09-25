@@ -83,6 +83,10 @@ def error(msg: str, status: int = 200) -> JSONResponse:
 
 def client_ip(request: Request) -> str:
     if TRUST_PROXY:
+        # Set by Cloudflare (Tunnel); the proxies in between only see cloudflared.
+        cf = request.headers.get("cf-connecting-ip")
+        if cf:
+            return cf.strip()
         fwd = request.headers.get("x-forwarded-for")
         if fwd:
             return fwd.split(",")[0].strip()

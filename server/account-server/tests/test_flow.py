@@ -169,3 +169,17 @@ def test_logout_revokes_token(client):
     token = Device().login(client)["access_token"]
     client.post("/api/logout", headers=auth(token))
     assert client.post("/api/currentUser", headers=auth(token)).status_code == 401
+
+
+def test_rate_limit_uses_cloudflare_client_ip(client, monkeypatch):
+    from app import main
+
+    monkeypatch.setattr(main, "TRUST_PROXY", True)
+    for _ in range(10):
+        client.post("/api/login", json={"username": "x", "password": "y"}, headers={"CF-Connecting-IP": "1.1.1.1"})
+    blocked = client.post("/api/login", json={"username": "baris", "password": "cok-gizli-sifre"},
+                          headers={"CF-Connecting-IP": "1.1.1.1"})
+    assert blocked.status_code == 429
+    other = client.post("/api/login", json={"username": "baris", "password": "cok-gizli-sifre"},
+                        headers={"CF-Connecting-IP": "2.2.2.2"})
+    assert other.json()["type"] == "access_token"

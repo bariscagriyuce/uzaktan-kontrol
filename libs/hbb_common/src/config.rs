@@ -73,7 +73,7 @@ lazy_static::lazy_static! {
     static ref KEY_PAIR: Mutex<Option<KeyPair>> = Default::default();
     static ref USER_DEFAULT_CONFIG: RwLock<(UserDefaultConfig, Instant)> = RwLock::new((UserDefaultConfig::load(), Instant::now()));
     pub static ref NEW_STORED_PEER_CONFIG: Mutex<HashSet<String>> = Default::default();
-    pub static ref DEFAULT_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
+    pub static ref DEFAULT_SETTINGS: RwLock<HashMap<String, String>> = RwLock::new(built_in_default_settings());
     pub static ref OVERWRITE_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
     pub static ref DEFAULT_DISPLAY_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
     pub static ref OVERWRITE_DISPLAY_SETTINGS: RwLock<HashMap<String, String>> = Default::default();
@@ -2842,6 +2842,16 @@ pub fn option2bool(option: &str, value: &str) -> bool {
     } else {
         value != "N"
     }
+}
+
+/// Defaults baked in at build time. UK_WEBSOCKET=Y reaches the server over
+/// WebSocket only, e.g. through a Cloudflare Tunnel.
+fn built_in_default_settings() -> HashMap<String, String> {
+    let mut settings = HashMap::new();
+    if option_env!("UK_WEBSOCKET") == Some("Y") {
+        settings.insert(keys::OPTION_ALLOW_WEBSOCKET.to_owned(), "Y".to_owned());
+    }
+    settings
 }
 
 pub fn use_ws() -> bool {

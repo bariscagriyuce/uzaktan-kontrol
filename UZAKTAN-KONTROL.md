@@ -99,13 +99,23 @@ Ev IP'n değişebildiği için https://www.duckdns.org adresinden ücretsiz bir 
 | 21116 | UDP | ID sunucusu |
 | 443 | TCP | Web paneli / API (HTTPS) |
 
-**d) Kurulum: CasaOS arayüzünden (önerilen)**
+**d) Kurulum: CasaOS arayüzünden + Cloudflare Tunnel (önerilen)**
+
+Bu yöntemde modemde port yönlendirme gerekmez ve CGNAT sorun olmaz. Her şey tek porttan (21114) yayınlanır, HTTPS'i Cloudflare sağlar.
 
 1. [`server/casaos/docker-compose.yml`](server/casaos/docker-compose.yml) dosyasının içeriğini kopyala.
-2. Bir metin düzenleyicide `uzak.alanadin.com` geçen her yeri kendi alan adınla değiştir (4 yer). `ADMIN_PASSWORD` satırına güçlü bir şifre yaz.
-3. CasaOS → **Uygulama Mağazası** → sağ üstteki **+** → **Özel Uygulama Kur** → **İçe Aktar** → metni yapıştır → **Gönder** → **Kur**.
-4. Anahtar dosyası: CasaOS **Dosyalar** → `/DATA/AppData/uzaktan-kontrol/relay/id_ed25519.pub`.
+   `ADMIN_PASSWORD` satırına güçlü bir şifre yaz. Alan adını (`uzak.alanadin.com`) şimdi ya da sonra değiştirebilirsin.
+2. CasaOS → **Uygulama Mağazası** → sağ üstteki **+** → **Özel Uygulama Kur** → **İçe Aktar** → metni yapıştır → **Gönder** → **Kur**.
+3. Cloudflare Zero Trust → **Networks → Tunnels** → tüneline **Public hostname** ekle:
+   - Alan adı: örneğin `uzak.alanadin.com`
+   - Service: `HTTP` → `<casaos-yerel-ip>:21114`
 
+   (WebSocket desteği Cloudflare'de varsayılan olarak açıktır.)
+4. CasaOS'ta uygulamanın ayarlarında `RELAY` değerini `uzak.alanadin.com:21117`, `PUBLIC_HOST` değerini `uzak.alanadin.com` yap ve kaydet.
+5. Anahtar dosyası: CasaOS **Dosyalar** → `/DATA/AppData/uzaktan-kontrol/relay/id_ed25519.pub`.
+6. GitHub değişkenlerine `UK_WEBSOCKET` = `Y` ekle (bkz. "Uygulamaları derle"). Uygulamalar sunucuya WebSocket ile, yani tünel üzerinden bağlanır.
+
+Tünel kullanıldığında görüntü akışı ev sunucun ve Cloudflare üzerinden geçer. Hız, ev internetinin yükleme (upload) hızıyla sınırlıdır.
 Hesap sunucusunun imajı (`ghcr.io/bariscagriyuce/uzaktan-kontrol-account`) GitHub Actions ile otomatik derlenir.
 
 **d2) Kurulum: terminalden** (CasaOS'a SSH ile bağlan ya da CasaOS'un terminalini kullan)
@@ -142,6 +152,7 @@ Depo ayarlarında
 | `UK_SERVER` | `uzak.alanadin.com` |
 | `UK_KEY` | `id_ed25519.pub` içeriği |
 | `UK_API_SERVER` | `https://uzak.alanadin.com` |
+| `UK_WEBSOCKET` | `Y` (Cloudflare Tunnel kullanıyorsan; port yönlendirmede boş bırak) |
 
 Sonra **Actions → Flutter Nightly Build → Run workflow** ile derlemeyi başlat. Windows
 (.exe/.msi), macOS (.dmg), Linux (.deb/.rpm/AppImage/Flatpak), Android (.apk)
