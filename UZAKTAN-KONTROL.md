@@ -111,7 +111,7 @@ Bu yöntemde modemde port yönlendirme gerekmez ve CGNAT sorun olmaz. Her şey t
    - Service: `HTTP` → `<casaos-yerel-ip>:21114`
 
    (WebSocket desteği Cloudflare'de varsayılan olarak açıktır.)
-4. CasaOS'ta uygulamanın ayarlarında `RELAY` değerini `uzak.alanadin.com:21117`, `PUBLIC_HOST` değerini `uzak.alanadin.com` yap ve kaydet.
+4. CasaOS'ta uygulamanın ayarlarında `RELAY_SERVERS` değerini `uzak.alanadin.com:21117`, `PUBLIC_HOST` değerini `uzak.alanadin.com` yap ve kaydet.
 5. Anahtar dosyası: CasaOS **Dosyalar** → `/DATA/AppData/uzaktan-kontrol/relay/id_ed25519.pub`.
 6. GitHub değişkenlerine `UK_WEBSOCKET` = `Y` ekle (bkz. "Uygulamaları derle"). Uygulamalar sunucuya WebSocket ile, yani tünel üzerinden bağlanır.
 

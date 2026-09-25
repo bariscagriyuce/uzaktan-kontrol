@@ -6,7 +6,7 @@
 # bu tek porttan geçer. HTTPS'i Cloudflare sağlar.
 #
 # Alan adını sonra da girebilirsin: CasaOS'ta uygulamanın ayarlarından
-# RELAY ve PUBLIC_HOST değerlerini değiştirmen yeterli.
+# RELAY_SERVERS ve PUBLIC_HOST değerlerini değiştirmen yeterli.
 name: uzaktan-kontrol
 
 services:
@@ -15,7 +15,7 @@ services:
     container_name: uzaktan-kontrol-hbbs
     command: hbbs
     environment:
-      RELAY: uzak.alanadin.com:21117
+      RELAY_SERVERS: uzak.alanadin.com:21117
     ports:
       # Only needed for direct (port-forwarded) or LAN access; the tunnel uses 21114.
       - "21115:21115"
@@ -27,7 +27,7 @@ services:
     restart: unless-stopped
     x-casaos:
       envs:
-        - container: RELAY
+        - container: RELAY_SERVERS
           description:
             en_us: "Your domain followed by :21117"
             tr_tr: "Alan adın ve sonuna :21117"
