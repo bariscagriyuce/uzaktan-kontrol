@@ -11,10 +11,11 @@ name: uzaktan-kontrol
 
 services:
   hbbs:
-    image: rustdesk/rustdesk-server:latest
+    # rustdesk-server with device registration over WebSocket, which the
+    # tunnel needs (server/rustdesk-server). x86_64 only.
+    image: ghcr.io/bariscagriyuce/uzaktan-kontrol-hbbs:latest
     container_name: uzaktan-kontrol-hbbs
-    # -r: relay address handed to clients. The released image reads no env var
-    # for it reliably, so it lives in the command.
+    # -r: relay address handed to clients.
     command: hbbs -r uzak.alanadin.com:21117
     ports:
       # 21115-21116: direct (port-forwarded) or LAN access; the tunnel uses 21114.
@@ -104,7 +105,7 @@ services:
     restart: unless-stopped
 
 x-casaos:
-  architectures: [amd64, arm64]
+  architectures: [amd64]
   main: gateway
   author: bariscagriyuce
   developer: bariscagriyuce
